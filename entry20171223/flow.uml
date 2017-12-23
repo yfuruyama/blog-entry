@@ -1,0 +1,22 @@
+@startuml
+
+actor developer
+
+node "Local" {
+  component [dev_appserver.py] as gae
+  database "SQLite" {
+    [RequestLog] as sqlite
+  }
+  component [gaelv] as gaelv
+  component [Browser] as browser
+}
+
+developer .r.> gae : 1. access
+gae -d-> sqlite : 2. insert log
+gaelv -d-> sqlite : 3. polling
+gaelv -r-> browser : 4. streaming by SSE
+developer ..> browser : 5. view
+
+gaelv -[hidden]l- gae
+ 
+@enduml

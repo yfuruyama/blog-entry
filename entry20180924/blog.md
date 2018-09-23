@@ -14,22 +14,24 @@ GAE の Task Queue は Queue に存在するタスクを全て一気に実行す
 
 パラメータの解説の前に Task Queue の実行レート制御のベースとなっている [Token Bucket](https://ja.wikipedia.org/wiki/%E3%83%88%E3%83%BC%E3%82%AF%E3%83%B3%E3%83%90%E3%82%B1%E3%83%83%E3%83%88)というアルゴリズムを見てみましょう。
 
-Token Bucket はネットワークに流れるトラフィックを一定量以下になるように調整するアルゴリズムであり、[Amazon API Gateway](https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/api-gateway-request-throttling.html) でもクライアントへの Rate Limit として使われています。
+Token Bucket はネットワークに流れるトラフィックを一定量以下になるように調整するアルゴリズムであり、[Amazon EBS の IOPS のバースト](https://aws.amazon.com/jp/blogs/aws/new-ssd-backed-elastic-block-storage/) や [Amazon API Gateway での Rate Limit](https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/api-gateway-request-throttling.html) でも使われています。
 
 Task Queue 上での Token Bucket アルゴリズムのルールはシンプルです。
 
 ここに画像貼る
 
 * タスクを実行する際にはトークンを一つ消費する
+* トークンがなくなるまでタスクはディスパッチされ続ける
 * バケットにトークンが存在しなければタスクの実行は待たされる
 * トークンは一定のレートでバケットに補充される(バケットサイズ分だけ貯められる)
 
 なぜ「秒間最大x件のタスクを実行させる」という単純な制御にしていないのでしょうか。
-それは一時的なバーストは許可したいが、定常的に最大スループットを出したくない
+それは一時的なバーストは許可したいが、定常的にはそれより低いスループットで処理させるようにしたいというのがあります。
 
-Task Queue は一度にドバっと Queue に入れられることがあります。
+Task Queue は非同期処理に使われるという性質上、処理しなければいけないタスク量が流動的なことが多いと思います。
+いつもは最大 100 tasks/sec で処理したいけれども、たまに 200 tasks が積まれることもある。そういった場合でも遅延なく処理したいという
 
-上記のパラメータのうち `bucket_size` と `rate` は Token Bucket アルゴリズムに関連した設定値です。
+それでは上記のパラメータについて見ていきます。
 
 # パラメータその1: bucket_size
 
@@ -41,7 +43,7 @@ Queue のサイズは[ドキュメント](https://cloud.google.com/appengine/quo
 
 # パラメータその2: rate
 
-バケットにトークンを補充するレートです。
+トークンの補充レートです。
 ここで大事なのはこのレートが
 
 トークンは時間経過によって補充されていきます。実行しているタスクが終わったかどうかは関係ありません。
@@ -63,4 +65,13 @@ Queue のサイズは[ドキュメント](https://cloud.google.com/appengine/quo
 
 つまり `bucket_size` と `rate` は秒間での最大実行**開始**数を定義しますが、`max_concurrent_requests` はある瞬間の最大実行数を定義します。
 
-# FAQ
+# まとめ
+
+Task Queue の設定値である、
+
+* bucket_size
+* rate
+* max_concurrent_requests
+
+の内容についてまとめました。
+

@@ -1,9 +1,9 @@
 Task Queue と Token Bucket アルゴリズム
 ===
 
-GAE の Task Queue (Push Queue) は Queue に入れられたタスクを全て一気に実行するのではなく、あらかじめ設定しておいた実行レートに従って、バックエンドの App Engine インスタンスにリクエストを投げてくれます。この実行レート制御のベースとなっているのが [Token Bucket](https://ja.wikipedia.org/wiki/%E3%83%88%E3%83%BC%E3%82%AF%E3%83%B3%E3%83%90%E3%82%B1%E3%83%83%E3%83%88) というアルゴリズムです。
+GAE の Task Queue (Push Queue) は Queue に入れられたタスクを全て一気に実行するのではなく、あらかじめ設定しておいた実行レートに従って、バックエンドの App Engine インスタンスにリクエストを投げてくれます。この実行レート制御のベースとなっているのが Token Bucket というアルゴリズムです。
 
-今回はその Token Bucket アルゴリズムと、[Task Queue の設定値](https://cloud.google.com/appengine/docs/standard/go/config/queueref) である
+今回はその Token Bucket アルゴリズムと、Task Queue の設定値である
 
 * bucket_size
 * rate
@@ -13,7 +13,7 @@ GAE の Task Queue (Push Queue) は Queue に入れられたタスクを全て�
 
 ## Token Bucket アルゴリズム
 
-Token Bucket はネットワークに流れるトラフィックを一定量以下になるように調整するアルゴリズムであり、[Amazon EBS の IOPS のバースト](https://aws.amazon.com/jp/blogs/aws/new-ssd-backed-elastic-block-storage/) や [Amazon API Gateway での Rate Limit](https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/api-gateway-request-throttling.html) でも使われてたりします。
+[Token Bucket](https://ja.wikipedia.org/wiki/%E3%83%88%E3%83%BC%E3%82%AF%E3%83%B3%E3%83%90%E3%82%B1%E3%83%83%E3%83%88) はネットワークに流れるトラフィックを一定量以下になるように調整するアルゴリズムであり、[Amazon EBS の IOPS のバースト制御](https://aws.amazon.com/jp/blogs/aws/new-ssd-backed-elastic-block-storage/) や [Amazon API Gateway での Rate Limit](https://docs.aws.amazon.com/ja_jp/apigateway/latest/developerguide/api-gateway-request-throttling.html) でも使われてたりします。
 
 Task Queue 上での Token Bucket アルゴリズムのルールは以下のようになります。
 
@@ -28,7 +28,7 @@ Task Queue 上での Token Bucket アルゴリズムのルールは以下のよ�
 
 ## Task Queue の設定値
 
-次に Task Queue の各設定値を見てみたいと思います。
+次に [Task Queue の各設定値](https://cloud.google.com/appengine/docs/standard/go/config/queueref) を見てみたいと思います。
 
 #### bucket_size
 
@@ -43,7 +43,7 @@ Task Queue 上での Token Bucket アルゴリズムのルールは以下のよ�
 
 トークンの補充レートです。
 
-この補充レート以上でタスクが enqueue された場合、例えバケットのサイãºが十分大きかったとしてもいずれバケットの中のトークンは0になってしまうので、長期的に見るとこの値がタスクの最大実行開始レートとなります。
+この補充レート以上でタスクが enqueue された場合、例えバケットのãµイズが十分大きかったとしてもいずれバケットの中のトークンは0になってしまうので、長期的に見るとこの値がタスクの最大実行開始レートとなります。
 
 トークンは時間経過によって補充されていきます。実行しているタスクが終わったかどうかは関係ありません。
 
@@ -65,7 +65,9 @@ Task Queue 上での Token Bucket アルゴリズムのルールは以下のよ�
 
 ## bucket_size の用途
 
-ここからは `bucket_size` の用途を、例を挙げながらもう少し見てみたいと思います。条件として、既に Queue にタスクが十分に積まれていて、それらを秒間最大500リクエストで処理したいとします。またバケットに対してトークンは200ms毎に補充されると仮定します(つまり秒間5回補充のタイミングがある)。
+ここからは `bucket_size` の用途を、例を挙げながらもう少し見てみたいと思います。条件として、既に Queue にタスクが十分に積まれていて、それらを秒間最大500リクエストで処理したいとします。またバケットに対してトークンは200ms毎に補充されると仮定します。
+
+尚、以下に示すグラフは実際の挙動からプロットしたものではなく、ドキュメントを元に動作を推測したものとなります(ãªので大分単純化されています)。
 
 #### bucket_size: 500, rate: 500/s の場合
 
@@ -84,9 +86,9 @@ Task Queue 上での Token Bucket アルゴリズムのルールは以下のよ�
 
 [f:id:furuyamayuuki:20180924115507p:plain:w400]
 
-すると、一回あたりのタスクの実行開始数が100個に抑えられ、小刻みに実行されるようになります。つまり、タスクの実行開始数が平滑化され、同じ秒間500リクエストでもより安定してバックエンドにリクエストを送れるようになります。
+すると、一回あたりのタスクの実行開始数が100個に抑えられ、小刻みに実行されるようにãªります。つまり、タスクがバッファリングされ実行開始数が平滑化されることで、同じ秒間500リクエストでもより安定してバックエンドにリクエストを送れるようになります。
 
-このまま更に `bucket_size` を小さくすればより平滑化されるように見えますが、実際は内部的なトークンの補充間隔に左右されてしまうので、[公式ドキュメント](https://cloud.google.com/appengine/docs/standard/go/config/queueref)で推奨されているように `rate` を5で割った `rate/5` の値にしておくのがいいと思われます。
+このまま更に `bucket_size` を小さくすればより平滑化されるように見えますが、内部的なトークンの補充間隔が広いとタスクが十分に実行されないことになるので、[公式ドキュメント](https://cloud.google.com/appengine/docs/standard/go/config/queueref)で推奨されているように `rate` を5で割った `rate/5` の値にしておくのがいいと思われます。
 
 ## まとめ
 
